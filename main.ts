@@ -1,21 +1,75 @@
-import chalk from "npm:chalk@5"
-import {table} from "npm:table@6.8.0"
+// import {z} from "https://deno.land/x/zod@v3.18.0/mod.ts"
 
-export function add(a: number, b: number): number {
-  return a + b
+import {exec} from "https://deno.land/x/execute@v1.1.0/mod.ts"
+import * as colors from "https://deno.land/std@0.153.0/fmt/colors.ts"
+import {Table} from "https://deno.land/x/cliffy@v0.24.3/table/mod.ts"
+
+import Ask from "https://deno.land/x/ask@1.0.6/mod.ts"
+
+const ask = new Ask() // global options are also supported! (see below)
+
+const firstPrompt = await ask.prompt([
+  {
+    name: "option",
+    type: "input",
+    message: "Enter --dev for dev dependencies or leave it empty fro dependencies",
+  },
+])
+
+const tableW = new Table()
+  .header(["Title", "Current version", "Available Stable Version"])
+  .maxColWidth(70)
+  .padding(1)
+  .indent(2)
+  .border(true)
+
+const getJsonFile = async () => {
+  const decoder = new TextDecoder()
+  const file = await Deno.readFile("a.json")
+  return decoder.decode(file)
 }
 
-// Learn more at https://deno.land/manual/examples/module_metadata#concepts
-if (import.meta.main) {
-  console.log("Add 2 + 3 =", add(2, 3))
+const file = await getJsonFile()
+const parseJsonFile = (file: string) => {
+  try {
+    const {dependencies, devDependencies} = JSON.parse(file)
+    return {dependencies, devDependencies}
+  } catch (error) {
+    const message = getErrorMessage(error)
+    console.error(`Can't parse file ${file}`, message)
+    return null
+  }
 }
 
-console.log(chalk.cyan("asdas"))
+const packages = parseJsonFile(file)
 
-const data = [
-  ["0A", "0B", "0C"],
-  ["1A", "1B", "1C"],
-  ["2A", "2B", "2C"],
-]
+const getDependencies = async (dependencies: Record<string, string>) =>
+  await Promise.all(
+    Object.entries(dependencies).map(async ([title, version]) => ({
+      Title: title,
+      CurrentVersion: version,
+      AvailableStableVersion: await getLatestVersion(title),
+    }))
+  )
 
-console.log(table(data))
+if (packages !== null) {
+  let dep
+  if (firstPrompt.option === "--dev") {
+    dep = await getDependencies(packages.devDependencies)
+  } else {
+    dep = await getDependencies(packages.dependencies)
+  }
+  dep = dep.map((p: Record<string, string>) => Object.values(p))
+  tableW.body(dep)
+}
+
+async function getLatestVersion(title: string) {
+  return await exec(`npm show ${title} version`)
+}
+
+tableW.render()
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
