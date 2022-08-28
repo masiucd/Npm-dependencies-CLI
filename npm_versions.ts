@@ -1,10 +1,20 @@
 // import {z} from "https://deno.land/x/zod@v3.18.0/mod.ts"
-// import {table} from "https://deno.land/x/minitable@v1.0/mod.ts"
+
 import {exec} from "https://deno.land/x/execute@v1.1.0/mod.ts"
 import * as colors from "https://deno.land/std@0.153.0/fmt/colors.ts"
 import {Table} from "https://deno.land/x/cliffy@v0.24.3/table/mod.ts"
 
-// npm view {package} ---> to get latest version from shell or  yarn info {package} versions or npm show {package} version
+import Ask from "https://deno.land/x/ask@1.0.6/mod.ts"
+
+const ask = new Ask() // global options are also supported! (see below)
+
+const firstPrompt = await ask.prompt([
+  {
+    name: "option",
+    type: "input",
+    message: "Enter --dev for dev dependencies or leave it empty fro dependencies",
+  },
+])
 
 const tableW = new Table()
   .header(["Title", "Current version", "Available Stable Version"])
@@ -12,9 +22,6 @@ const tableW = new Table()
   .padding(1)
   .indent(2)
   .border(true)
-// .render()
-
-const args = Deno.args
 
 const getJsonFile = async () => {
   const decoder = new TextDecoder()
@@ -46,8 +53,8 @@ const getDependencies = async (dependencies: Record<string, string>) =>
   )
 
 if (packages !== null) {
-  let dep: any
-  if (args[0] === "dev") {
+  let dep
+  if (firstPrompt.option === "--dev") {
     dep = await getDependencies(packages.devDependencies)
   } else {
     dep = await getDependencies(packages.dependencies)
