@@ -1,16 +1,11 @@
 #!/Users/marcis/.deno/bin/deno
-
 import {z} from "https://deno.land/x/zod@v3.18.0/mod.ts"
-
-import {exec} from "https://deno.land/x/execute@v1.1.0/mod.ts"
-import * as colors from "https://deno.land/std@0.153.0/fmt/colors.ts"
 import {Table} from "https://deno.land/x/cliffy@v0.24.3/table/mod.ts"
-
 import Ask from "https://deno.land/x/ask@1.0.6/mod.ts"
+import {getErrorMessage, getLatestVersion, getObjectValues} from "./helpers.ts"
 
-const ask = new Ask() // global options are also supported! (see below)
-
-const firstPrompt = await ask.prompt([
+const ask = new Ask()
+const input = await ask.prompt([
   {
     name: "option",
     type: "input",
@@ -19,7 +14,7 @@ const firstPrompt = await ask.prompt([
 ])
 
 const tableW = new Table()
-  .header(["Title", "Current version", "Available Stable Version"])
+  .header(["Title", "Current version", "Latest Version"])
   .maxColWidth(70)
   .padding(1)
   .indent(2)
@@ -48,7 +43,7 @@ const packages = parseJsonFile(file)
 const Dependency = z.object({
   Title: z.string(),
   CurrentVersion: z.string(),
-  AvailableStableVersion: z.string(),
+  LatestVersion: z.string(),
 })
 const DependenciesList = z.array(Dependency)
 const getDependencies = async (dependencies: Record<string, string>) => {
@@ -56,40 +51,22 @@ const getDependencies = async (dependencies: Record<string, string>) => {
     Object.entries(dependencies).map(async ([title, version]) => ({
       Title: title,
       CurrentVersion: version,
-      AvailableStableVersion: await getLatestVersion(title, version),
+      LatestVersion: await getLatestVersion(title, version),
     }))
   )
   return DependenciesList.parse(res)
 }
 
 if (packages !== null) {
-  if (firstPrompt.option === "--dev") {
+  if (input.option === "--dev") {
     const dep = await getDependencies(packages.devDependencies)
-    const r = dep.map((p: Record<string, string>) => Object.values(p))
+    const r = getObjectValues(dep)
     tableW.body(r)
   } else {
     const dep = await getDependencies(packages.dependencies)
-    const res = dep.map((p: Record<string, string>) => Object.values(p))
+    const res = getObjectValues(dep)
     tableW.body(res)
   }
 }
 
-async function getLatestVersion(title: string, version: string) {
-  const res = await exec(`npm show ${title} version`)
-  const latest = res.split(".").map(Number)
-  const current = version
-    .split(".")
-    .map(x => x.replace(/\W/, ""))
-    .map(Number)
-  if (latest[0] > current[0]) {
-    return colors.bgYellow(colors.black(res))
-  }
-  return res
-}
-
 tableW.render()
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message
-  return String(error)
-}
