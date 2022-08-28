@@ -1,4 +1,6 @@
-// import {z} from "https://deno.land/x/zod@v3.18.0/mod.ts"
+#!/Users/marcis/.deno/bin/deno
+
+import {z} from "https://deno.land/x/zod@v3.18.0/mod.ts"
 
 import {exec} from "https://deno.land/x/execute@v1.1.0/mod.ts"
 import * as colors from "https://deno.land/std@0.153.0/fmt/colors.ts"
@@ -43,28 +45,46 @@ const parseJsonFile = (file: string) => {
 
 const packages = parseJsonFile(file)
 
-const getDependencies = async (dependencies: Record<string, string>) =>
-  await Promise.all(
+const Dependency = z.object({
+  Title: z.string(),
+  CurrentVersion: z.string(),
+  AvailableStableVersion: z.string(),
+})
+const DependenciesList = z.array(Dependency)
+const getDependencies = async (dependencies: Record<string, string>) => {
+  const res = await Promise.all(
     Object.entries(dependencies).map(async ([title, version]) => ({
       Title: title,
       CurrentVersion: version,
-      AvailableStableVersion: await getLatestVersion(title),
+      AvailableStableVersion: await getLatestVersion(title, version),
     }))
   )
-
-if (packages !== null) {
-  let dep
-  if (firstPrompt.option === "--dev") {
-    dep = await getDependencies(packages.devDependencies)
-  } else {
-    dep = await getDependencies(packages.dependencies)
-  }
-  dep = dep.map((p: Record<string, string>) => Object.values(p))
-  tableW.body(dep)
+  return DependenciesList.parse(res)
 }
 
-async function getLatestVersion(title: string) {
-  return await exec(`npm show ${title} version`)
+if (packages !== null) {
+  if (firstPrompt.option === "--dev") {
+    const dep = await getDependencies(packages.devDependencies)
+    const r = dep.map((p: Record<string, string>) => Object.values(p))
+    tableW.body(r)
+  } else {
+    const dep = await getDependencies(packages.dependencies)
+    const res = dep.map((p: Record<string, string>) => Object.values(p))
+    tableW.body(res)
+  }
+}
+
+async function getLatestVersion(title: string, version: string) {
+  const res = await exec(`npm show ${title} version`)
+  const latest = res.split(".").map(Number)
+  const current = version
+    .split(".")
+    .map(x => x.replace(/\W/, ""))
+    .map(Number)
+  if (latest[0] > current[0]) {
+    return colors.bgYellow(colors.black(res))
+  }
+  return res
 }
 
 tableW.render()
